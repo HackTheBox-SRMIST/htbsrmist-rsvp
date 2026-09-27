@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --htb-bg: #0d0f0e;
+  --htb-card: #141716;
+  --htb-elevated: #1a1d1b;
+  --htb-border: #242826;
+  --htb-green: #9fef00;
+  --htb-text: #c5c8c6;
+  --htb-heading: #f3f4f6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background-color: var(--htb-bg);
+  color: var(--htb-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prevent iOS Safari 16px auto-zoom */
+input, select, textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input, select, textarea {
+    font-size: 0.875rem;
+  }
+}
+
+/* Touch target helpers */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--htb-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #242826;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #343936;
+}
+
+input:focus {
+  outline: none;
+}
+
+/* Professional QR Scanner Reticle & Viewfinder Styles */
+@keyframes qrScanline {
+  0% {
+    top: 6%;
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 94%;
+    opacity: 0.3;
+  }
+}
+
+.animate-scanline {
+  animation: qrScanline 2.2s ease-in-out infinite alternate;
+}
+
+#admin-qr-reader {
+  border: none !important;
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+  text-align: center !important;
+}
+
+#admin-qr-reader video {
+  border-radius: 0.75rem;
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 auto !important;
+  display: block !important;
+}
+
+#admin-qr-reader__scan_region {
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto !important;
+}
+
+#admin-qr-reader__scan_region video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  margin: 0 auto !important;
+}
+
+#admin-qr-reader__dashboard {
+  display: none !important;
+}
