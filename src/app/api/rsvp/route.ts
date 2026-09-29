@@ -68,12 +68,15 @@ export async function POST(request: NextRequest) {
     const storedRaNumber = (attendee.raNumber || '').trim();
 
     // 4. If the participant has already RSVP'd:
-    // Do not create another RSVP or participant record. Return existing token and message.
+    // Do not create another RSVP or participant record. Return existing token and status.
     if (attendee.rsvp === 'YES' && attendee.ticketId) {
+      const isCheckedIn = attendee.checkedIn === 'YES';
       return NextResponse.json({
         success: true,
         alreadyRsvpd: true,
-        message: 'RSVP already completed.',
+        checkedIn: isCheckedIn,
+        checkInTime: attendee.checkInTime || undefined,
+        message: isCheckedIn ? 'Checked in already.' : 'RSVP confirmed. Check-in pending.',
         token: attendee.ticketId,
         name: attendee.name,
         email: attendee.email,
@@ -90,6 +93,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       alreadyRsvpd: false,
+      checkedIn: false,
       message: 'RSVP confirmed!',
       token,
       name: attendee.name,
