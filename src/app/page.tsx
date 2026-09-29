@@ -26,7 +26,7 @@ export default function RsvpPage() {
     type: 'success' | 'error' | 'warning' | 'info';
   }>({ visible: false, message: '', type: 'info' });
 
-  const orgName = 'Hack The Box Chennai';
+  const orgName = 'HTB Chennai';
 
   const showToast = (
     message: string,
@@ -133,7 +133,7 @@ export default function RsvpPage() {
   };
 
   return (
-    <div className="min-h-screen bg-htb-bg text-htb-text flex flex-col justify-between p-4 sm:p-6">
+    <div className="min-h-[100dvh] bg-htb-bg text-htb-text flex flex-col items-center justify-center p-4">
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -141,17 +141,24 @@ export default function RsvpPage() {
         onClose={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
 
-      <div className="w-full max-w-md mx-auto my-auto py-6 sm:py-10">
+      <div className="w-full max-w-md mx-auto my-auto">
         {/* Brand Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center mb-3 px-4 py-1.5 rounded-full bg-htb-green/10 border border-htb-green/40 backdrop-blur-md shadow-[inset_0_1px_0_rgba(159,239,0,0.18)] text-xs font-medium tracking-wide text-htb-green">
-            <span>{orgName}</span>
+        <div className="text-center mb-4 sm:mb-6">
+          <div className="inline-flex items-center gap-3.5 mb-3.5 px-6 py-3 rounded-2xl bg-htb-elevated border border-htb-border font-mono shadow-lg">
+            <img
+              src="/logo.png"
+              alt="HTB Chennai Logo"
+              className="w-10 h-10 sm:w-12 sm:h-12 object-contain"
+            />
+            <span className="text-lg sm:text-xl text-htb-heading font-bold tracking-wide">
+              {orgName}
+            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-htb-heading tracking-tight">
             Event Pass
           </h1>
           <p className="text-xs sm:text-sm text-htb-muted mt-1.5 max-w-sm mx-auto">
-            Confirm your attendance to receive your event ticket for venue access and refreshments.
+            Confirm your attendance to receive your event ticket
           </p>
         </div>
 
@@ -355,12 +362,11 @@ export default function RsvpPage() {
             </div>
           )}
         </div>
+        {/* Footer */}
+        <footer className="text-center text-xs text-htb-muted pt-6 pb-2">
+          <p>{orgName} &bull; Official Event Portal</p>
+        </footer>
       </div>
-
-      {/* Footer */}
-      <footer className="text-center text-xs text-htb-muted py-4">
-        <p>{orgName} &bull; Official Event Portal</p>
-      </footer>
     </div>
   );
 }

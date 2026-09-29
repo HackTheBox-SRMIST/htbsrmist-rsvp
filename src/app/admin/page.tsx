@@ -650,17 +650,22 @@ export default function AdminPage() {
   // ── Login Screen ──
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-htb-bg flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-htb-bg flex items-center justify-center p-4">
         <Toast
           visible={toast.visible}
           message={toast.message}
           type={toast.type}
           onClose={() => setToast((p) => ({ ...p, visible: false }))}
         />
-        <div className="bg-htb-card border border-htb-border w-full max-w-sm rounded-xl p-6 sm:p-8 shadow-2xl">
-          <div className="mb-6">
+      <div className="bg-htb-card border border-htb-border w-full max-w-sm rounded-xl p-5 sm:p-8 shadow-2xl mx-4">
+          <div className="mb-6 text-center">
+            <img
+              src="/logo.png"
+              alt="HTB Chennai Logo"
+              className="w-12 h-12 mx-auto mb-3 object-contain"
+            />
             <h1 className="text-xl font-bold text-htb-heading mb-1">Event Admin</h1>
-            <p className="text-xs text-htb-muted">Hack The Box Chennai</p>
+            <p className="text-xs text-htb-muted">HTB Chennai</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -681,9 +686,19 @@ export default function AdminPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg font-semibold rounded-lg text-sm transition-all duration-150 active:scale-[0.99]"
+              className="w-full h-12 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg font-semibold rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2 active:scale-[0.99]"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-htb-bg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <span>Sign In</span>
+              )}
             </button>
           </form>
           <div className="mt-6 pt-4 border-t border-htb-border text-center">
@@ -1064,12 +1079,19 @@ export default function AdminPage() {
       )}
 
       {/* Top Navbar */}
-      <header className="border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-40">
-        <div>
-          <h1 className="text-sm sm:text-base font-bold text-htb-heading leading-tight">
-            Hack The Box Chennai
-          </h1>
-          <p className="text-[11px] text-htb-muted hidden sm:block">Venue Admin & Check-in</p>
+      <header className="border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.png"
+            alt="HTB Chennai Logo"
+            className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0"
+          />
+          <div>
+            <h1 className="text-sm sm:text-base font-bold text-htb-heading leading-tight">
+              HTB Chennai
+            </h1>
+            <p className="text-[11px] text-htb-muted">Event Admin</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2.5 text-xs">
