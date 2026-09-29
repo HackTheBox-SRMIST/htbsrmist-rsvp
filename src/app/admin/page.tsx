@@ -45,10 +45,15 @@ interface LookupResult {
   refreshmentTime: string | null;
 }
 
+const SESSION_KEY = 'htb_admin_session';
+const SESSION_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const logoutTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -295,12 +300,36 @@ export default function AdminPage() {
     }
   };
 
+  const handleSignOut = useCallback(() => {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {}
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+    setIsAuthenticated(false);
+    setPassword('');
+    showToast('Signed out', 'info');
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     const success = await fetchData(password);
     if (success) {
+      const expiresAt = Date.now() + SESSION_TTL_MS;
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ password, expiresAt }));
+      } catch {}
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+      }
+      logoutTimerRef.current = setTimeout(() => {
+        handleSignOut();
+        showToast('Session expired after 6 hours. Please sign in again.', 'warning');
+      }, SESSION_TTL_MS);
       setIsAuthenticated(true);
       showToast('Signed in successfully', 'success');
     } else {
@@ -617,6 +646,58 @@ export default function AdminPage() {
     }
   };
 
+  // Restore persistent 6-hour session from localStorage on initial load
+  useEffect(() => {
+    let isMounted = true;
+    const restoreSession = async () => {
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
+        if (!raw) {
+          if (isMounted) setIsCheckingSession(false);
+          return;
+        }
+        const session = JSON.parse(raw);
+        const remaining = session.expiresAt ? session.expiresAt - Date.now() : 0;
+        if (!session.password || remaining <= 0) {
+          localStorage.removeItem(SESSION_KEY);
+          if (isMounted) setIsCheckingSession(false);
+          return;
+        }
+        if (isMounted) setPassword(session.password);
+        const success = await fetchData(session.password);
+        if (isMounted) {
+          if (success) {
+            setIsAuthenticated(true);
+            if (logoutTimerRef.current) {
+              clearTimeout(logoutTimerRef.current);
+            }
+            logoutTimerRef.current = setTimeout(() => {
+              handleSignOut();
+              showToast('Session expired after 6 hours. Please sign in again.', 'warning');
+            }, remaining);
+          } else {
+            localStorage.removeItem(SESSION_KEY);
+            setPassword('');
+          }
+        }
+      } catch {
+        try {
+          localStorage.removeItem(SESSION_KEY);
+        } catch {}
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchData, handleSignOut]);
+
   // Auto-sync interval (runs automatically in background)
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -646,6 +727,26 @@ export default function AdminPage() {
       (a.raNumber && a.raNumber.toLowerCase().includes(q))
     );
   });
+
+  // ── Session Restoring Screen ──
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-[100dvh] bg-htb-bg flex flex-col items-center justify-center p-4">
+        <img
+          src="/logo.png"
+          alt="HTB Chennai Logo"
+          className="w-12 h-12 mb-3 object-contain animate-pulse"
+        />
+        <div className="flex items-center gap-2 text-xs font-mono text-htb-muted">
+          <svg className="animate-spin h-3.5 w-3.5 text-htb-green" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <span>Restoring session...</span>
+        </div>
+      </div>
+    );
+  }
 
   // ── Login Screen ──
   if (!isAuthenticated) {
@@ -1102,10 +1203,7 @@ export default function AdminPage() {
             RSVP Portal
           </Link>
           <button
-            onClick={() => {
-              setIsAuthenticated(false);
-              setPassword('');
-            }}
+            onClick={handleSignOut}
             className="border border-htb-border hover:bg-htb-elevated px-3 py-1.5 rounded-md text-xs font-medium text-htb-muted hover:text-htb-heading transition-colors"
           >
             Sign Out
