@@ -296,6 +296,7 @@ export async function getStats() {
     rsvpCount,
     checkinCount,
     refreshmentCount,
+    pendingRsvpCount: Math.max(0, total - rsvpCount),
     pendingCheckinCount: Math.max(0, rsvpCount - checkinCount),
     pendingRefreshmentCount: Math.max(0, checkinCount - refreshmentCount),
   };

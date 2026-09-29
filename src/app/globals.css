@@ -127,3 +127,20 @@ input:focus {
 #admin-qr-reader__dashboard {
   display: none !important;
 }
+
+#admin-qr-reader div[style*="rgba(9, 9, 9"] {
+  display: none !important;
+}
+
+@keyframes progressShrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-progress-shrink {
+  animation: progressShrink 2.8s linear forwards;
+}

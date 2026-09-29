@@ -9,9 +9,16 @@ interface ToastProps {
   type: ToastType;
   visible: boolean;
   onClose: () => void;
+  position?: 'top' | 'bottom';
 }
 
-export default function Toast({ message, type, visible, onClose }: ToastProps) {
+export default function Toast({
+  message,
+  type,
+  visible,
+  onClose,
+  position = 'bottom',
+}: ToastProps) {
   useEffect(() => {
     if (visible) {
       const timer = setTimeout(() => {
@@ -71,9 +78,15 @@ export default function Toast({ message, type, visible, onClose }: ToastProps) {
   const styles = getTypeStyles(type);
 
   return (
-    <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-auto sm:min-w-[320px] max-w-md z-50 animate-slide-up">
+    <div
+      className={`fixed z-50 animate-slide-up ${
+        position === 'top'
+          ? 'top-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-auto sm:min-w-[320px] max-w-md'
+          : 'bottom-5 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:min-w-[320px] max-w-md'
+      }`}
+    >
       <div
-        className={`${styles.bgColor} border ${styles.borderColor} p-3.5 shadow-2xl rounded-lg flex items-center justify-between gap-3`}
+        className={`${styles.bgColor} border ${styles.borderColor} p-3.5 shadow-2xl rounded-xl flex items-center justify-between gap-3`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           {styles.icon}

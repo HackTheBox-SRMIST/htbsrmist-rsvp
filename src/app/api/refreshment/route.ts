@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     if (attendee.refreshment === 'YES') {
       return NextResponse.json({
         status: 'ALREADY_COLLECTED',
-        message: 'Refreshment already collected.',
+        message: 'Already claimed refreshment.',
         refreshmentTime: attendee.refreshmentTime,
         participant: {
           id: attendee.ticketId,

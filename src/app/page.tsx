@@ -83,9 +83,10 @@ export default function RsvpPage() {
         try {
           const QRCode = (await import('qrcode')).default;
           const url = await QRCode.toDataURL(data.token, {
-            width: 360,
+            width: 720,
             margin: 2,
             color: { dark: '#0d0f0e', light: '#ffffff' },
+            errorCorrectionLevel: 'H',
           });
           setQrDataUrl(url);
         } catch (qrErr) {
@@ -148,12 +149,20 @@ export default function RsvpPage() {
 
     try {
       const canvas = document.createElement('canvas');
-      const width = 720;
-      const height = 1040;
-      canvas.width = width;
-      canvas.height = height;
+      const baseWidth = 720;
+      const baseHeight = 1040;
+      const scale = 3; // 3x Ultra-HD crisp print quality (2160 x 3120px)
+      canvas.width = baseWidth * scale;
+      canvas.height = baseHeight * scale;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas not supported');
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.scale(scale, scale);
+
+      const width = baseWidth;
+      const height = baseHeight;
 
       const drawRoundRect = (
         x: number,
@@ -269,17 +278,21 @@ export default function RsvpPage() {
       ctx.fillStyle = '#c5c8c6';
       ctx.fillText(result.email, chipX + 10, 177);
 
-      // Perforation Line with Side Cutouts (Exact Inward Semicircles)
+      // Perforation Line with Side Cutouts (Exact Inward Semicircles, erasing outer vertical card border)
       const tearY = 235;
-      // Cutout Left (curves inward to the right)
+      const r1 = 20;
       ctx.fillStyle = '#0d0f0e';
+
+      // Cutout Left: erase outer vertical border and curve inward to the right
       ctx.beginPath();
-      ctx.arc(cardX, tearY, 20, -Math.PI / 2, Math.PI / 2);
+      ctx.rect(cardX - 10, tearY - r1 - 2, 11, (r1 + 2) * 2);
+      ctx.arc(cardX, tearY, r1, -Math.PI / 2, Math.PI / 2);
       ctx.fill();
 
-      // Cutout Right (curves inward to the left)
+      // Cutout Right: erase outer vertical border and curve inward to the left
       ctx.beginPath();
-      ctx.arc(cardX + cardW, tearY, 20, Math.PI / 2, (3 * Math.PI) / 2);
+      ctx.rect(cardX + cardW - 1, tearY - r1 - 2, 11, (r1 + 2) * 2);
+      ctx.arc(cardX + cardW, tearY, r1, Math.PI / 2, (3 * Math.PI) / 2);
       ctx.fill();
 
       // Dashed Line (Bold & Prominent)
@@ -333,6 +346,18 @@ export default function RsvpPage() {
       ctx.lineTo(qrBoxX + qrBoxW - 12, qrBoxY + qrBoxH - 12 - rL);
       ctx.stroke();
 
+      // Generate ultra-high resolution QR code (1200x1200px) with highest error correction
+      let highResQr = qrDataUrl;
+      try {
+        const QRCode = (await import('qrcode')).default;
+        highResQr = await QRCode.toDataURL(result.token, {
+          width: 1200,
+          margin: 1,
+          color: { dark: '#0d0f0e', light: '#ffffff' },
+          errorCorrectionLevel: 'H',
+        });
+      } catch {}
+
       // Draw QR Image
       await new Promise<void>((resolve) => {
         const qrImg = new Image();
@@ -341,7 +366,7 @@ export default function RsvpPage() {
           resolve();
         };
         qrImg.onerror = () => resolve();
-        qrImg.src = qrDataUrl;
+        qrImg.src = highResQr;
       });
 
       // Scan at venue caption
@@ -350,14 +375,21 @@ export default function RsvpPage() {
       ctx.textAlign = 'center';
       ctx.fillText('SCAN AT VENUE ENTRY', width / 2, qrBoxY + qrBoxH - 18);
 
-      // Secondary Perforation Tear Line with Side Cutouts (Exact Inward Semicircles)
+      // Secondary Perforation Tear Line with Side Cutouts (Exact Inward Semicircles, erasing outer vertical card border)
       const tear2Y = 665;
+      const r2 = 15;
       ctx.fillStyle = '#0d0f0e';
+
+      // Left Cutout: erase outer vertical border and curve inward to the right
       ctx.beginPath();
-      ctx.arc(cardX, tear2Y, 15, -Math.PI / 2, Math.PI / 2);
+      ctx.rect(cardX - 10, tear2Y - r2 - 2, 11, (r2 + 2) * 2);
+      ctx.arc(cardX, tear2Y, r2, -Math.PI / 2, Math.PI / 2);
       ctx.fill();
+
+      // Right Cutout: erase outer vertical border and curve inward to the left
       ctx.beginPath();
-      ctx.arc(cardX + cardW, tear2Y, 15, Math.PI / 2, (3 * Math.PI) / 2);
+      ctx.rect(cardX + cardW - 1, tear2Y - r2 - 2, 11, (r2 + 2) * 2);
+      ctx.arc(cardX + cardW, tear2Y, r2, Math.PI / 2, (3 * Math.PI) / 2);
       ctx.fill();
 
       ctx.setLineDash([6, 5]);
