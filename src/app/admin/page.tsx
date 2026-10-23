@@ -108,6 +108,7 @@ export default function AdminPage() {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [isProcessingPass, setIsProcessingPass] = useState(false);
   const scannerRef = useRef<any>(null);
   const isProcessingScanRef = useRef(false);
   const isScannerStartingRef = useRef(false);
@@ -165,16 +166,19 @@ export default function AdminPage() {
       try {
         const container = document.getElementById('admin-qr-reader');
         if (container) {
-          const video = container.querySelector('video') as HTMLVideoElement | null;
-          if (video && video.srcObject) {
-            const stream = video.srcObject as MediaStream;
-            stream.getTracks().forEach((track) => {
-              try {
-                track.stop();
-              } catch {}
-            });
-            video.srcObject = null;
-          }
+          const videos = container.querySelectorAll('video');
+          videos.forEach((video) => {
+            if (video.srcObject) {
+              const stream = video.srcObject as MediaStream;
+              stream.getTracks().forEach((track) => {
+                try {
+                  track.stop();
+                } catch {}
+              });
+              video.srcObject = null;
+            }
+          });
+          container.innerHTML = '';
         }
       } catch {}
     };
@@ -234,36 +238,27 @@ export default function AdminPage() {
     }, 120);
   }, []);
 
-  // Dismissing a scan result behaves like a hard refresh of the scanner desk: the
-  // scanner is fully stopped (same action as the Stop Camera button) and a brand new
-  // one is started on the next pass, with no tap required. The reader node is never
-  // unmounted, so the rebuild happens in place.
-  const restartCameraForNextPass = useCallback(() => {
+  // Dismiss camera result toast and leave camera OFF (Option A)
+  const dismissCameraToast = useCallback(() => {
+    startModalDismissalCooldown();
+    cameraToastRef.current = null;
+    setCameraToast(null);
+    setIsProcessingPass(false);
     isProcessingScanRef.current = false;
     lastScanRef.current = { code: '', at: 0 };
-    cameraRetryRef.current = 0;
-    isCameraLiveRef.current = false;
-    isScannerStartingRef.current = false;
+  }, [startModalDismissalCooldown]);
 
-    if (!scannerActiveRef.current) {
-      setScannerActive(true);
-      return;
-    }
-
-    // Force a full stop/start cycle on the next tick so the teardown drains first.
-    // The effect itself still refuses to start while a card is open, so this is safe
-    // to fire unconditionally.
-    stopCameraScanner().finally(() => {
-      setScannerEpoch((n) => n + 1);
-    });
-  }, [stopCameraScanner]);
-
+  // Turn camera back on for the next attendee (Option A)
   const resumeCameraScanning = useCallback(() => {
     startModalDismissalCooldown();
     cameraToastRef.current = null;
     setCameraToast(null);
-    restartCameraForNextPass();
-  }, [startModalDismissalCooldown, restartCameraForNextPass]);
+    setIsProcessingPass(false);
+    isProcessingScanRef.current = false;
+    lastScanRef.current = { code: '', at: 0 };
+    cameraRetryRef.current = 0;
+    setScannerActive(true);
+  }, [startModalDismissalCooldown]);
 
   const showCameraToast = (toastData: {
     type: 'success' | 'warning' | 'error';
@@ -275,6 +270,7 @@ export default function AdminPage() {
   }) => {
     // Show scan result card. The camera is stopped immediately and stays safely off
     // until the desk volunteer explicitly taps [Scan Next Pass] or the cross button.
+    setIsProcessingPass(false);
     cameraToastRef.current = toastData;
     setCameraToast(toastData);
   };
@@ -284,6 +280,7 @@ export default function AdminPage() {
     cameraToastRef.current = null;
     modalParticipantRef.current = participant;
     setCameraToast(null);
+    setIsProcessingPass(false);
     setModalParticipant(participant);
     stopCameraScanner();
   };
@@ -293,7 +290,9 @@ export default function AdminPage() {
     modalParticipantRef.current = null;
     setModalParticipant(null);
     setActionMessage('');
-    restartCameraForNextPass();
+    setIsProcessingPass(false);
+    isProcessingScanRef.current = false;
+    lastScanRef.current = { code: '', at: 0 };
   };
 
   // Lock background clicks, touch scrolling and stop scanner whenever any modal or result card is open
@@ -786,13 +785,15 @@ export default function AdminPage() {
     }
   };
 
-  // High-speed auto scan handler: instantly stops camera on scan to prevent background looping
+  // High-speed auto scan handler: Option A cleanly turns camera off immediately upon scan
   const handleCameraScan = async (decodedText: string) => {
     // If already processing a scan, or a camera toast is active, or modal is open, ignore
     if (isProcessingScanRef.current || cameraToastRef.current || modalParticipantRef.current) return;
     isProcessingScanRef.current = true;
+    setIsProcessingPass(true);
 
-    // Immediately stop the camera scanner and kill all video stream tracks so camera turns off instantly
+    // Option A: Cleanly turn off scanner state and release camera sensor tracks immediately
+    setScannerActive(false);
     await stopCameraScanner();
 
     // Trigger instant chime & vibration (Google Pay / Paytm style feedback)
@@ -816,14 +817,6 @@ export default function AdminPage() {
       clean = clean.split('/pass/').pop()?.split(/[?#]/)[0] || clean;
     }
 
-    const nowMs = Date.now();
-    // A pass that was recently scanned: suppress repeat scan if within 4s without looping
-    if (lastScanRef.current.code === clean && nowMs - lastScanRef.current.at < 4000) {
-      isProcessingScanRef.current = false;
-      return;
-    }
-    lastScanRef.current = { code: clean, at: nowMs };
-
     const currentMode = stationModeRef.current;
     try {
       if (currentMode === 'checkin') {
@@ -841,8 +834,7 @@ export default function AdminPage() {
         message: 'Could not process pass. Tap Scan Next to retry.',
       });
     } finally {
-      // Re-assert the stop once processing is done: the lookup call takes long enough
-      // for a queued camera start to slip in, and that would give a second camera.
+      setIsProcessingPass(false);
       await stopCameraScanner();
     }
   };
@@ -1276,7 +1268,7 @@ export default function AdminPage() {
                 : 'text-htb-muted hover:text-htb-heading'
             }`}
           >
-            <span>QR Scanner & Desk</span>
+            <span>QR Scanner</span>
           </button>
           <button
             onClick={() => {
@@ -1293,9 +1285,9 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* ── TAB 1: Streamlined Mobile-First QR Scanner Desk ── */}
+        {/* ── TAB 1: Streamlined Mobile-First QR Scanner ── */}
         <div className={activeTab === 'scanner' ? 'max-w-xl mx-auto space-y-4' : 'hidden'}>
-            {/* Simple Station Switcher: Check-in Gate or Refreshments */}
+            {/* Mode Switcher: Check-in or Refreshments */}
             <div className="grid grid-cols-2 gap-2 bg-htb-card border border-htb-border p-1.5 rounded-xl">
               <button
                 onClick={() => {
@@ -1309,7 +1301,7 @@ export default function AdminPage() {
                     : 'text-htb-muted hover:text-htb-heading'
                 }`}
               >
-                <span>Check-in Gate</span>
+                <span>Check-in</span>
               </button>
               <button
                 onClick={() => {
@@ -1333,8 +1325,8 @@ export default function AdminPage() {
                 <div>
                   <h2 className="text-xs font-semibold text-htb-heading">
                     {stationMode === 'checkin'
-                      ? 'Gate Check-in Station'
-                      : 'Refreshments Station'}
+                      ? 'Check-in Scanner'
+                      : 'Refreshment Scanner'}
                   </h2>
                   <p className="text-[11px] text-htb-muted">
                     {stationMode === 'checkin'
@@ -1398,9 +1390,30 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {!scannerActive && (
+              {/* Verifying pass indicator while request resolves */}
+              {isProcessingPass && (
+                <div className="border border-htb-green/40 bg-htb-card rounded-xl p-8 sm:p-12 text-center shadow-lg animate-pulse">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-htb-green/10 border border-htb-green/40 flex items-center justify-center text-htb-green mb-3">
+                    <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-bold text-htb-green">
+                    Verifying Pass...
+                  </p>
+                  <p className="text-[11px] text-htb-muted mt-1">
+                    Communicating with check-in scanner
+                  </p>
+                </div>
+              )}
+
+              {!scannerActive && !isProcessingPass && (
                 <div
-                  onClick={() => setScannerActive(true)}
+                  onClick={() => {
+                    if (isDismissingModalRef.current) return;
+                    setScannerActive(true);
+                  }}
                   className="cursor-pointer border border-dashed border-htb-border hover:border-htb-green/40 hover:bg-htb-elevated/40 rounded-xl p-8 sm:p-12 text-center transition-all group"
                 >
                   <div className="w-12 h-12 mx-auto rounded-full bg-htb-elevated border border-htb-border group-hover:border-htb-green/40 flex items-center justify-center text-htb-muted group-hover:text-htb-green transition-colors mb-3">
@@ -1411,7 +1424,7 @@ export default function AdminPage() {
                   <p className="text-xs font-semibold text-htb-heading group-hover:text-htb-green transition-colors">
                     Click to Start Camera Scanner
                   </p>
-                    <p className="text-[11px] text-htb-muted mt-1">
+                  <p className="text-[11px] text-htb-muted mt-1">
                     Holds the QR anywhere in view and fires the moment it reads
                   </p>
                 </div>
@@ -1824,18 +1837,18 @@ export default function AdminPage() {
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
-          {/* Blackout Backdrop - tap outside closes cleanly */}
+          {/* Blackout Backdrop - tap outside closes cleanly (Option A: leaves camera off) */}
           <div
             className="fixed inset-0 bg-black/85 backdrop-blur-md animate-fade-in cursor-pointer"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              resumeCameraScanning();
+              dismissCameraToast();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              resumeCameraScanning();
+              dismissCameraToast();
             }}
           />
 
@@ -1890,12 +1903,12 @@ export default function AdminPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  resumeCameraScanning();
+                  dismissCameraToast();
                 }}
                 onTouchEnd={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  resumeCameraScanning();
+                  dismissCameraToast();
                 }}
                 className="w-8 h-8 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-lg leading-none transition-colors active:scale-90"
                 aria-label="Close result"
@@ -1933,28 +1946,12 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Action Buttons: See Info and Close */}
-            <div className="pt-2 flex items-center gap-2.5">
-              {cameraToast.participant && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = cameraToast.participant!;
-                    setCameraToast(null);
-                    openParticipant(p);
-                  }}
-                  className="flex-1 h-11 bg-htb-elevated hover:bg-htb-elevated-hover border border-htb-border hover:border-htb-heading/40 text-htb-heading font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <svg className="w-4 h-4 text-htb-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>See Info</span>
-                </button>
-              )}
+            {/* Action Button: Scan Next Pass */}
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={resumeCameraScanning}
-                className="flex-1 h-11 bg-htb-green hover:bg-htb-green-dim text-htb-bg font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                className="w-full h-11 bg-htb-green hover:bg-htb-green-dim text-htb-bg font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
