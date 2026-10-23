@@ -2159,12 +2159,12 @@ export default function AdminPage() {
             onPointerUp={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
-            className="relative z-10 bg-htb-card border border-htb-border w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 pointer-events-auto overscroll-contain"
+            className="relative z-10 bg-htb-card border border-htb-border w-full max-w-md rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3 pointer-events-auto overscroll-contain"
           >
-            <div className="flex items-center justify-between border-b border-htb-border pb-3">
+            <div className="flex items-center justify-between border-b border-htb-border pb-2">
               <div>
-                <h3 className="text-base font-bold text-htb-heading">Import Participants (JSON)</h3>
-                <p className="text-xs text-htb-muted">Upload a JSON file of attendee records</p>
+                <h3 className="text-sm sm:text-base font-bold text-htb-heading leading-tight">Import Participants (JSON)</h3>
+                <p className="text-[11px] text-htb-muted">Upload a JSON file of attendee records</p>
               </div>
               <button
                 type="button"
@@ -2186,21 +2186,21 @@ export default function AdminPage() {
                   setImportError('');
                   setImportPreviewCount(null);
                 }}
-                className="w-8 h-8 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-lg leading-none transition-colors active:scale-90"
+                className="w-7 h-7 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-base leading-none transition-colors active:scale-90"
               >
                 &times;
               </button>
             </div>
 
             {/* Expected JSON Format Helper */}
-            <div className="bg-htb-elevated/70 border border-htb-border rounded-xl p-3 space-y-1.5">
+            <div className="bg-htb-elevated/70 border border-htb-border rounded-xl p-2.5 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-htb-heading">Sample JSON Format</span>
-                <span className="text-[10px] font-mono font-medium text-htb-warning bg-htb-warning/10 border border-htb-warning/30 px-2 py-0.5 rounded">
+                <span className="text-[11px] font-semibold text-htb-heading">Sample JSON Format</span>
+                <span className="text-[10px] font-mono font-medium text-htb-warning bg-htb-warning/10 border border-htb-warning/30 px-1.5 py-0.5 rounded">
                   raNumber is optional
                 </span>
               </div>
-              <pre className="text-[11px] font-mono text-htb-muted bg-htb-card p-2.5 rounded-lg border border-htb-border overflow-x-auto select-all">
+              <pre className="text-[10.5px] leading-tight font-mono text-htb-muted bg-htb-card py-2 px-2.5 rounded-lg border border-htb-border overflow-x-auto select-all">
 {`[
   {
     "name": "David Miller",
@@ -2209,14 +2209,11 @@ export default function AdminPage() {
   }
 ]`}
               </pre>
-              <p className="text-[11px] text-htb-muted leading-relaxed">
-                Provide an array of objects. <strong className="text-htb-heading">name</strong> and <strong className="text-htb-heading">email</strong> are required. <strong className="text-htb-heading">raNumber</strong> is optional.
-              </p>
             </div>
 
             {/* File Selection */}
             <div>
-              <label className="block text-xs font-medium text-htb-heading mb-1.5">
+              <label className="block text-[11px] font-medium text-htb-heading mb-1">
                 Select JSON File
               </label>
               <input
@@ -2228,12 +2225,12 @@ export default function AdminPage() {
               />
               <div
                 onClick={() => jsonFileInputRef.current?.click()}
-                className="border-2 border-dashed border-htb-border hover:border-htb-border-light rounded-xl p-4 text-center cursor-pointer bg-htb-elevated/40 hover:bg-htb-elevated transition-colors"
+                className="border-2 border-dashed border-htb-border hover:border-htb-border-light rounded-xl py-2 px-3 text-center cursor-pointer bg-htb-elevated/40 hover:bg-htb-elevated transition-colors"
               >
                 {importFile ? (
                   <div>
                     <p className="text-xs font-semibold text-htb-heading">{importFile.name}</p>
-                    <p className="text-[11px] text-htb-muted mt-0.5">
+                    <p className="text-[10.5px] text-htb-muted mt-0.5">
                       {(importFile.size / 1024).toFixed(1)} KB
                       {importPreviewCount !== null && ` • ${importPreviewCount} valid participants`}
                     </p>
@@ -2243,18 +2240,17 @@ export default function AdminPage() {
                         e.stopPropagation();
                         jsonFileInputRef.current?.click();
                       }}
-                      className="text-[11px] text-htb-green hover:underline mt-2 inline-block"
+                      className="text-[10.5px] text-htb-green hover:underline mt-1 inline-block"
                     >
                       Choose different file
                     </button>
                   </div>
                 ) : (
                   <div>
-                    <svg className="w-8 h-8 mx-auto text-htb-muted/70 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5 mx-auto text-htb-muted/70 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <p className="text-xs font-medium text-htb-heading">Click to browse JSON file</p>
-                    <p className="text-[11px] text-htb-muted mt-1">Accepts array of participants: [{'{'} name, email, ra_number? {'}'}]</p>
                   </div>
                 )}
               </div>
@@ -2262,20 +2258,20 @@ export default function AdminPage() {
 
             {/* Import Mode: The 2 Options */}
             <div>
-              <label className="block text-xs font-medium text-htb-heading mb-2">
+              <label className="block text-[11px] font-medium text-htb-heading mb-1">
                 Choose Import Action
               </label>
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {/* Option 1: Add as Add-on (Merge) */}
                 <div
                   onClick={() => setImportMode('merge')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     importMode === 'merge'
                       ? 'border-htb-green/60 bg-htb-green/5 ring-1 ring-htb-green/40'
                       : 'border-htb-border bg-htb-elevated/40 hover:bg-htb-elevated'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <input
                       type="radio"
                       name="importMode"
@@ -2284,10 +2280,10 @@ export default function AdminPage() {
                       className="mt-0.5 text-htb-green focus:ring-htb-green"
                     />
                     <div>
-                      <p className="text-xs font-semibold text-htb-heading">
+                      <p className="text-xs font-semibold text-htb-heading leading-tight">
                         Add as Add-on to Existing Participants (Merge)
                       </p>
-                      <p className="text-[11px] text-htb-muted mt-0.5 leading-relaxed">
+                      <p className="text-[10.5px] text-htb-muted mt-0.5 leading-snug">
                         Preserves existing participants, RSVP tokens, and check-in records. Adds new participants and updates existing details.
                       </p>
                     </div>
@@ -2297,13 +2293,13 @@ export default function AdminPage() {
                 {/* Option 2: Remove Existing Data (Replace all) */}
                 <div
                   onClick={() => setImportMode('replace')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     importMode === 'replace'
                       ? 'border-htb-warning/60 bg-htb-warning/5 ring-1 ring-htb-warning/40'
                       : 'border-htb-border bg-htb-elevated/40 hover:bg-htb-elevated'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <input
                       type="radio"
                       name="importMode"
@@ -2312,10 +2308,10 @@ export default function AdminPage() {
                       className="mt-0.5 text-htb-warning focus:ring-htb-warning"
                     />
                     <div>
-                      <p className="text-xs font-semibold text-htb-heading">
+                      <p className="text-xs font-semibold text-htb-heading leading-tight">
                         Remove Existing Data & Replace All
                       </p>
-                      <p className="text-[11px] text-htb-muted mt-0.5 leading-relaxed">
+                      <p className="text-[10.5px] text-htb-muted mt-0.5 leading-snug">
                         Removes all current participants and completely replaces the database with the records from the uploaded JSON.
                       </p>
                     </div>
@@ -2325,13 +2321,13 @@ export default function AdminPage() {
             </div>
 
             {importError && (
-              <div className="p-2.5 rounded-lg bg-htb-error/10 border border-htb-error/30 text-htb-error text-xs">
+              <div className="p-2 rounded-lg bg-htb-error/10 border border-htb-error/30 text-htb-error text-xs">
                 {importError}
               </div>
             )}
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-htb-border">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-htb-border">
               <button
                 type="button"
                 onClick={() => {
@@ -2341,7 +2337,7 @@ export default function AdminPage() {
                   setImportError('');
                   setImportPreviewCount(null);
                 }}
-                className="h-10 px-4 rounded-lg border border-htb-border hover:bg-htb-elevated text-htb-muted hover:text-htb-heading text-xs font-medium transition-colors"
+                className="h-8 px-3.5 rounded-lg border border-htb-border hover:bg-htb-elevated text-htb-muted hover:text-htb-heading text-xs font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -2349,7 +2345,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleExecuteImport}
                 disabled={!importFile || importLoading || importPreviewCount === 0}
-                className="h-10 px-5 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                className="h-8 px-4 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
               >
                 {importLoading ? 'Importing...' : 'Import Participants'}
               </button>
