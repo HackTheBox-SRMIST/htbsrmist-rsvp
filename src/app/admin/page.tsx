@@ -231,7 +231,7 @@ export default function AdminPage() {
     setTimeout(() => {
       isDismissingModalRef.current = false;
       setIsDismissingModal(false);
-    }, 500);
+    }, 120);
   }, []);
 
   // Dismissing a scan result behaves like a hard refresh of the scanner desk: the
@@ -298,7 +298,7 @@ export default function AdminPage() {
 
   // Lock background clicks, touch scrolling and stop scanner whenever any modal or result card is open
   const isModalOpen = Boolean(modalParticipant || importModalOpen || cameraToast);
-  const isBackgroundLocked = isModalOpen || isDismissingModal;
+  const isBackgroundLocked = isModalOpen;
 
   useEffect(() => {
     if (isModalOpen) {
@@ -1135,8 +1135,8 @@ export default function AdminPage() {
       {/* Top Navbar */}
       <header
         aria-hidden={isBackgroundLocked}
-        className={`border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40 transition-all ${
-          isBackgroundLocked ? 'pointer-events-none select-none opacity-30 filter blur-[1px]' : ''
+        className={`border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40 ${
+          isBackgroundLocked ? 'pointer-events-none select-none' : ''
         }`}
       >
         <div className="flex items-center gap-3">
@@ -1172,8 +1172,8 @@ export default function AdminPage() {
       {/* Main Container */}
       <main
         aria-hidden={isBackgroundLocked}
-        className={`flex-1 p-3.5 sm:p-6 max-w-7xl w-full mx-auto space-y-5 transition-all ${
-          isBackgroundLocked ? 'pointer-events-none select-none opacity-30 filter blur-[1px]' : ''
+        className={`flex-1 p-3.5 sm:p-6 max-w-7xl w-full mx-auto space-y-5 ${
+          isBackgroundLocked ? 'pointer-events-none select-none' : ''
         }`}
       >
         {/* Navigation Tabs */}
@@ -1183,9 +1183,9 @@ export default function AdminPage() {
               if (isModalOpen || isDismissingModalRef.current) return;
               setActiveTab('scanner');
             }}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-0 ${
               activeTab === 'scanner'
-                ? 'bg-htb-elevated text-htb-green shadow-sm border border-htb-border/60'
+                ? 'bg-htb-elevated text-htb-green shadow-sm'
                 : 'text-htb-muted hover:text-htb-heading'
             }`}
           >
@@ -1196,9 +1196,9 @@ export default function AdminPage() {
               if (isModalOpen || isDismissingModalRef.current) return;
               setActiveTab('table');
             }}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-0 ${
               activeTab === 'table'
-                ? 'bg-htb-elevated text-htb-green shadow-sm border border-htb-border/60'
+                ? 'bg-htb-elevated text-htb-green shadow-sm'
                 : 'text-htb-muted hover:text-htb-heading'
             }`}
           >
@@ -1216,9 +1216,9 @@ export default function AdminPage() {
                   setStationMode('checkin');
                   setActionMessage('');
                 }}
-                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors text-center flex items-center justify-center gap-1.5 focus:outline-none focus:ring-0 ${
                   stationMode === 'checkin'
-                    ? 'bg-htb-elevated text-htb-green border border-htb-green/40 shadow-sm'
+                    ? 'bg-htb-elevated text-htb-green shadow-sm'
                     : 'text-htb-muted hover:text-htb-heading'
                 }`}
               >
@@ -1230,9 +1230,9 @@ export default function AdminPage() {
                   setStationMode('refreshment');
                   setActionMessage('');
                 }}
-                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors text-center flex items-center justify-center gap-1.5 focus:outline-none focus:ring-0 ${
                   stationMode === 'refreshment'
-                    ? 'bg-htb-elevated text-htb-green border border-htb-green/40 shadow-sm'
+                    ? 'bg-htb-elevated text-htb-green shadow-sm'
                     : 'text-htb-muted hover:text-htb-heading'
                 }`}
               >
