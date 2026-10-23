@@ -509,6 +509,19 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  // Helper to reliably retrieve active admin password
+  const getActiveAdminPassword = useCallback(() => {
+    if (password) return password;
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.password) return parsed.password;
+      }
+    } catch {}
+    return '';
+  }, [password]);
+
   // Lookup participant by token or email
   const handleLookup = async (tokenOrEmail: string, fromCamera = false) => {
     const query = tokenOrEmail.trim();
@@ -518,11 +531,21 @@ export default function AdminPage() {
     try {
       const isEmail = query.includes('@');
       const body = isEmail ? { email: query } : { token: query };
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/lookup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify(body),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
 
       const data = await res.json();
       if (data.success && data.participant) {
@@ -555,11 +578,22 @@ export default function AdminPage() {
     setActionLoading(true);
     setActionMessage('');
     try {
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/checkin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify({ token, email }),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
+
       const data = await res.json();
 
       let toastType: 'success' | 'warning' | 'error' = 'error';
@@ -608,7 +642,28 @@ export default function AdminPage() {
         }
       }
 
-      await fetchData();
+      // Optimistically update local participant and statistics immediately
+      if (data.status === 'CHECK_IN_SUCCESS' && data.participant) {
+        const p = data.participant;
+        setAttendees((prev) =>
+          prev.map((a) =>
+            (p.id && a.id === p.id) || (a.email && a.email.toLowerCase() === p.email.toLowerCase())
+              ? { ...a, hasCheckedIn: true, checkInTime: p.checkInTime || new Date().toISOString() }
+              : a
+          )
+        );
+        setStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalCheckedIn: prev.totalCheckedIn + 1,
+              }
+            : null
+        );
+      }
+
+      // Sync full database in background without blocking the UI
+      fetchData().catch(() => {});
     } catch {
       showToast('Connection error during check-in', 'error');
       if (fromCamera) {
@@ -628,11 +683,22 @@ export default function AdminPage() {
     setActionLoading(true);
     setActionMessage('');
     try {
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/refreshment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify({ token, email }),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
+
       const data = await res.json();
 
       let toastType: 'success' | 'warning' | 'error' = 'error';
@@ -684,7 +750,28 @@ export default function AdminPage() {
         }
       }
 
-      await fetchData();
+      // Optimistically update local participant and statistics immediately
+      if (data.status === 'REFRESHMENT_SUCCESS' && data.participant) {
+        const p = data.participant;
+        setAttendees((prev) =>
+          prev.map((a) =>
+            (p.id && a.id === p.id) || (a.email && a.email.toLowerCase() === p.email.toLowerCase())
+              ? { ...a, hasRefreshment: true, refreshmentTime: p.refreshmentTime || new Date().toISOString() }
+              : a
+          )
+        );
+        setStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalRefreshment: prev.totalRefreshment + 1,
+              }
+            : null
+        );
+      }
+
+      // Sync full database in background without blocking the UI
+      fetchData().catch(() => {});
     } catch {
       showToast('Connection error during refreshment action', 'error');
       if (fromCamera) {

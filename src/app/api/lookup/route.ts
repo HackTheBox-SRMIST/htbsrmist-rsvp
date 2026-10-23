@@ -1,10 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findAttendeeByToken, findAttendeeByEmail } from '@/lib/database';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { requireAdmin } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const denied = requireAdmin(request, 'lookup');
+    if (denied) return denied;
+
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+    if (!checkRateLimit(`lookup-${ip}`, 60, 60000)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'RATE_LIMITED',
+          message: 'Too many requests. Please slow down.',
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { token, email } = body;
 
