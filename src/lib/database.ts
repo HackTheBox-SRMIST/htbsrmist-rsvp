@@ -66,10 +66,10 @@ function connect(): Promise<Db> {
   }
 
   const client = new MongoClient(MONGO_URI, {
-    // Serverless instances are short-lived and a free Atlas cluster caps total
-    // connections, so each instance opens a single pooled connection.
-    maxPoolSize: 1,
-    minPoolSize: 0,
+    // Dynamic connection pooling: up to 10 parallel connections to support
+    // concurrent scans, lookups, and ticket generation with zero blocking.
+    maxPoolSize: 10,
+    minPoolSize: 1,
     // Atlas closes idle connections; keep the window generous so a warm
     // instance is not torn down between two attendee scans.
     maxIdleTimeMS: 300000,

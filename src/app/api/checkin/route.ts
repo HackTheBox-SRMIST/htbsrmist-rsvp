@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findAttendeeByToken, findAttendeeByEmail, markCheckedIn } from '@/lib/database';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { requireAdmin } from '@/lib/adminAuth';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const denied = requireAdmin(request, 'checkin');
+    if (denied) return denied;
+
     const ip =
-      request.headers.get('x-forwarded-for') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
-    if (!checkRateLimit(`checkin-${ip}`, 45, 60000)) {
+    if (!checkRateLimit(`checkin-${ip}`, 60, 60000)) {
       return NextResponse.json(
         { status: 'RATE_LIMITED', message: 'Too many requests. Please slow down.' },
         { status: 429 }

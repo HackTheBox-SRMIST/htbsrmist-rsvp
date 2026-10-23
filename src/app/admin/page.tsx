@@ -108,6 +108,7 @@ export default function AdminPage() {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [isProcessingPass, setIsProcessingPass] = useState(false);
   const scannerRef = useRef<any>(null);
   const isProcessingScanRef = useRef(false);
   const isScannerStartingRef = useRef(false);
@@ -165,16 +166,19 @@ export default function AdminPage() {
       try {
         const container = document.getElementById('admin-qr-reader');
         if (container) {
-          const video = container.querySelector('video') as HTMLVideoElement | null;
-          if (video && video.srcObject) {
-            const stream = video.srcObject as MediaStream;
-            stream.getTracks().forEach((track) => {
-              try {
-                track.stop();
-              } catch {}
-            });
-            video.srcObject = null;
-          }
+          const videos = container.querySelectorAll('video');
+          videos.forEach((video) => {
+            if (video.srcObject) {
+              const stream = video.srcObject as MediaStream;
+              stream.getTracks().forEach((track) => {
+                try {
+                  track.stop();
+                } catch {}
+              });
+              video.srcObject = null;
+            }
+          });
+          container.innerHTML = '';
         }
       } catch {}
     };
@@ -231,39 +235,30 @@ export default function AdminPage() {
     setTimeout(() => {
       isDismissingModalRef.current = false;
       setIsDismissingModal(false);
-    }, 500);
+    }, 120);
   }, []);
 
-  // Dismissing a scan result behaves like a hard refresh of the scanner desk: the
-  // scanner is fully stopped (same action as the Stop Camera button) and a brand new
-  // one is started on the next pass, with no tap required. The reader node is never
-  // unmounted, so the rebuild happens in place.
-  const restartCameraForNextPass = useCallback(() => {
+  // Dismiss camera result toast and leave camera OFF (Option A)
+  const dismissCameraToast = useCallback(() => {
+    startModalDismissalCooldown();
+    cameraToastRef.current = null;
+    setCameraToast(null);
+    setIsProcessingPass(false);
     isProcessingScanRef.current = false;
     lastScanRef.current = { code: '', at: 0 };
-    cameraRetryRef.current = 0;
-    isCameraLiveRef.current = false;
-    isScannerStartingRef.current = false;
+  }, [startModalDismissalCooldown]);
 
-    if (!scannerActiveRef.current) {
-      setScannerActive(true);
-      return;
-    }
-
-    // Force a full stop/start cycle on the next tick so the teardown drains first.
-    // The effect itself still refuses to start while a card is open, so this is safe
-    // to fire unconditionally.
-    stopCameraScanner().finally(() => {
-      setScannerEpoch((n) => n + 1);
-    });
-  }, [stopCameraScanner]);
-
+  // Turn camera back on for the next attendee (Option A)
   const resumeCameraScanning = useCallback(() => {
     startModalDismissalCooldown();
     cameraToastRef.current = null;
     setCameraToast(null);
-    restartCameraForNextPass();
-  }, [startModalDismissalCooldown, restartCameraForNextPass]);
+    setIsProcessingPass(false);
+    isProcessingScanRef.current = false;
+    lastScanRef.current = { code: '', at: 0 };
+    cameraRetryRef.current = 0;
+    setScannerActive(true);
+  }, [startModalDismissalCooldown]);
 
   const showCameraToast = (toastData: {
     type: 'success' | 'warning' | 'error';
@@ -275,6 +270,7 @@ export default function AdminPage() {
   }) => {
     // Show scan result card. The camera is stopped immediately and stays safely off
     // until the desk volunteer explicitly taps [Scan Next Pass] or the cross button.
+    setIsProcessingPass(false);
     cameraToastRef.current = toastData;
     setCameraToast(toastData);
   };
@@ -284,6 +280,7 @@ export default function AdminPage() {
     cameraToastRef.current = null;
     modalParticipantRef.current = participant;
     setCameraToast(null);
+    setIsProcessingPass(false);
     setModalParticipant(participant);
     stopCameraScanner();
   };
@@ -293,12 +290,14 @@ export default function AdminPage() {
     modalParticipantRef.current = null;
     setModalParticipant(null);
     setActionMessage('');
-    restartCameraForNextPass();
+    setIsProcessingPass(false);
+    isProcessingScanRef.current = false;
+    lastScanRef.current = { code: '', at: 0 };
   };
 
   // Lock background clicks, touch scrolling and stop scanner whenever any modal or result card is open
   const isModalOpen = Boolean(modalParticipant || importModalOpen || cameraToast);
-  const isBackgroundLocked = isModalOpen || isDismissingModal;
+  const isBackgroundLocked = isModalOpen;
 
   useEffect(() => {
     if (isModalOpen) {
@@ -509,6 +508,19 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  // Helper to reliably retrieve active admin password
+  const getActiveAdminPassword = useCallback(() => {
+    if (password) return password;
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(SESSION_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.password) return parsed.password;
+      }
+    } catch {}
+    return '';
+  }, [password]);
+
   // Lookup participant by token or email
   const handleLookup = async (tokenOrEmail: string, fromCamera = false) => {
     const query = tokenOrEmail.trim();
@@ -518,11 +530,21 @@ export default function AdminPage() {
     try {
       const isEmail = query.includes('@');
       const body = isEmail ? { email: query } : { token: query };
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/lookup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify(body),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
 
       const data = await res.json();
       if (data.success && data.participant) {
@@ -555,11 +577,22 @@ export default function AdminPage() {
     setActionLoading(true);
     setActionMessage('');
     try {
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/checkin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify({ token, email }),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
+
       const data = await res.json();
 
       let toastType: 'success' | 'warning' | 'error' = 'error';
@@ -608,7 +641,28 @@ export default function AdminPage() {
         }
       }
 
-      await fetchData();
+      // Optimistically update local participant and statistics immediately
+      if (data.status === 'CHECK_IN_SUCCESS' && data.participant) {
+        const p = data.participant;
+        setAttendees((prev) =>
+          prev.map((a) =>
+            (p.id && a.id === p.id) || (a.email && a.email.toLowerCase() === p.email.toLowerCase())
+              ? { ...a, hasCheckedIn: true, checkInTime: p.checkInTime || new Date().toISOString() }
+              : a
+          )
+        );
+        setStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalCheckedIn: prev.totalCheckedIn + 1,
+              }
+            : null
+        );
+      }
+
+      // Sync full database in background without blocking the UI
+      fetchData().catch(() => {});
     } catch {
       showToast('Connection error during check-in', 'error');
       if (fromCamera) {
@@ -628,11 +682,22 @@ export default function AdminPage() {
     setActionLoading(true);
     setActionMessage('');
     try {
+      const adminPass = getActiveAdminPassword();
       const res = await fetch('/api/refreshment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPass,
+        },
         body: JSON.stringify({ token, email }),
       });
+
+      if (res.status === 401) {
+        showToast('Admin session expired. Please sign in again.', 'error');
+        handleSignOut();
+        return;
+      }
+
       const data = await res.json();
 
       let toastType: 'success' | 'warning' | 'error' = 'error';
@@ -684,7 +749,28 @@ export default function AdminPage() {
         }
       }
 
-      await fetchData();
+      // Optimistically update local participant and statistics immediately
+      if (data.status === 'REFRESHMENT_SUCCESS' && data.participant) {
+        const p = data.participant;
+        setAttendees((prev) =>
+          prev.map((a) =>
+            (p.id && a.id === p.id) || (a.email && a.email.toLowerCase() === p.email.toLowerCase())
+              ? { ...a, hasRefreshment: true, refreshmentTime: p.refreshmentTime || new Date().toISOString() }
+              : a
+          )
+        );
+        setStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalRefreshment: prev.totalRefreshment + 1,
+              }
+            : null
+        );
+      }
+
+      // Sync full database in background without blocking the UI
+      fetchData().catch(() => {});
     } catch {
       showToast('Connection error during refreshment action', 'error');
       if (fromCamera) {
@@ -699,13 +785,15 @@ export default function AdminPage() {
     }
   };
 
-  // High-speed auto scan handler: instantly stops camera on scan to prevent background looping
+  // High-speed auto scan handler: Option A cleanly turns camera off immediately upon scan
   const handleCameraScan = async (decodedText: string) => {
     // If already processing a scan, or a camera toast is active, or modal is open, ignore
     if (isProcessingScanRef.current || cameraToastRef.current || modalParticipantRef.current) return;
     isProcessingScanRef.current = true;
+    setIsProcessingPass(true);
 
-    // Immediately stop the camera scanner and kill all video stream tracks so camera turns off instantly
+    // Option A: Cleanly turn off scanner state and release camera sensor tracks immediately
+    setScannerActive(false);
     await stopCameraScanner();
 
     // Trigger instant chime & vibration (Google Pay / Paytm style feedback)
@@ -729,14 +817,6 @@ export default function AdminPage() {
       clean = clean.split('/pass/').pop()?.split(/[?#]/)[0] || clean;
     }
 
-    const nowMs = Date.now();
-    // A pass that was recently scanned: suppress repeat scan if within 4s without looping
-    if (lastScanRef.current.code === clean && nowMs - lastScanRef.current.at < 4000) {
-      isProcessingScanRef.current = false;
-      return;
-    }
-    lastScanRef.current = { code: clean, at: nowMs };
-
     const currentMode = stationModeRef.current;
     try {
       if (currentMode === 'checkin') {
@@ -754,8 +834,7 @@ export default function AdminPage() {
         message: 'Could not process pass. Tap Scan Next to retry.',
       });
     } finally {
-      // Re-assert the stop once processing is done: the lookup call takes long enough
-      // for a queued camera start to slip in, and that would give a second camera.
+      setIsProcessingPass(false);
       await stopCameraScanner();
     }
   };
@@ -1135,8 +1214,8 @@ export default function AdminPage() {
       {/* Top Navbar */}
       <header
         aria-hidden={isBackgroundLocked}
-        className={`border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40 transition-all ${
-          isBackgroundLocked ? 'pointer-events-none select-none opacity-30 filter blur-[1px]' : ''
+        className={`border-b border-htb-border bg-htb-card px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40 ${
+          isBackgroundLocked ? 'pointer-events-none select-none' : ''
         }`}
       >
         <div className="flex items-center gap-3">
@@ -1172,8 +1251,8 @@ export default function AdminPage() {
       {/* Main Container */}
       <main
         aria-hidden={isBackgroundLocked}
-        className={`flex-1 p-3.5 sm:p-6 max-w-7xl w-full mx-auto space-y-5 transition-all ${
-          isBackgroundLocked ? 'pointer-events-none select-none opacity-30 filter blur-[1px]' : ''
+        className={`flex-1 p-3.5 sm:p-6 max-w-7xl w-full mx-auto space-y-5 ${
+          isBackgroundLocked ? 'pointer-events-none select-none' : ''
         }`}
       >
         {/* Navigation Tabs */}
@@ -1183,22 +1262,22 @@ export default function AdminPage() {
               if (isModalOpen || isDismissingModalRef.current) return;
               setActiveTab('scanner');
             }}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-0 ${
               activeTab === 'scanner'
-                ? 'bg-htb-elevated text-htb-green shadow-sm border border-htb-border/60'
+                ? 'bg-htb-elevated text-htb-green shadow-sm'
                 : 'text-htb-muted hover:text-htb-heading'
             }`}
           >
-            <span>QR Scanner & Desk</span>
+            <span>QR Scanner</span>
           </button>
           <button
             onClick={() => {
               if (isModalOpen || isDismissingModalRef.current) return;
               setActiveTab('table');
             }}
-            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-0 ${
               activeTab === 'table'
-                ? 'bg-htb-elevated text-htb-green shadow-sm border border-htb-border/60'
+                ? 'bg-htb-elevated text-htb-green shadow-sm'
                 : 'text-htb-muted hover:text-htb-heading'
             }`}
           >
@@ -1206,9 +1285,9 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* ── TAB 1: Streamlined Mobile-First QR Scanner Desk ── */}
+        {/* ── TAB 1: Streamlined Mobile-First QR Scanner ── */}
         <div className={activeTab === 'scanner' ? 'max-w-xl mx-auto space-y-4' : 'hidden'}>
-            {/* Simple Station Switcher: Check-in Gate or Refreshments */}
+            {/* Mode Switcher: Check-in or Refreshments */}
             <div className="grid grid-cols-2 gap-2 bg-htb-card border border-htb-border p-1.5 rounded-xl">
               <button
                 onClick={() => {
@@ -1216,13 +1295,13 @@ export default function AdminPage() {
                   setStationMode('checkin');
                   setActionMessage('');
                 }}
-                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors text-center flex items-center justify-center gap-1.5 focus:outline-none focus:ring-0 ${
                   stationMode === 'checkin'
-                    ? 'bg-htb-elevated text-htb-green border border-htb-green/40 shadow-sm'
+                    ? 'bg-htb-elevated text-htb-green shadow-sm'
                     : 'text-htb-muted hover:text-htb-heading'
                 }`}
               >
-                <span>Check-in Gate</span>
+                <span>Check-in</span>
               </button>
               <button
                 onClick={() => {
@@ -1230,9 +1309,9 @@ export default function AdminPage() {
                   setStationMode('refreshment');
                   setActionMessage('');
                 }}
-                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors text-center flex items-center justify-center gap-1.5 focus:outline-none focus:ring-0 ${
                   stationMode === 'refreshment'
-                    ? 'bg-htb-elevated text-htb-green border border-htb-green/40 shadow-sm'
+                    ? 'bg-htb-elevated text-htb-green shadow-sm'
                     : 'text-htb-muted hover:text-htb-heading'
                 }`}
               >
@@ -1246,8 +1325,8 @@ export default function AdminPage() {
                 <div>
                   <h2 className="text-xs font-semibold text-htb-heading">
                     {stationMode === 'checkin'
-                      ? 'Gate Check-in Station'
-                      : 'Refreshments Station'}
+                      ? 'Check-in Scanner'
+                      : 'Refreshment Scanner'}
                   </h2>
                   <p className="text-[11px] text-htb-muted">
                     {stationMode === 'checkin'
@@ -1311,9 +1390,30 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {!scannerActive && (
+              {/* Verifying pass indicator while request resolves */}
+              {isProcessingPass && (
+                <div className="border border-htb-green/40 bg-htb-card rounded-xl p-8 sm:p-12 text-center shadow-lg animate-pulse">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-htb-green/10 border border-htb-green/40 flex items-center justify-center text-htb-green mb-3">
+                    <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-bold text-htb-green">
+                    Verifying Pass...
+                  </p>
+                  <p className="text-[11px] text-htb-muted mt-1">
+                    Communicating with check-in scanner
+                  </p>
+                </div>
+              )}
+
+              {!scannerActive && !isProcessingPass && (
                 <div
-                  onClick={() => setScannerActive(true)}
+                  onClick={() => {
+                    if (isDismissingModalRef.current) return;
+                    setScannerActive(true);
+                  }}
                   className="cursor-pointer border border-dashed border-htb-border hover:border-htb-green/40 hover:bg-htb-elevated/40 rounded-xl p-8 sm:p-12 text-center transition-all group"
                 >
                   <div className="w-12 h-12 mx-auto rounded-full bg-htb-elevated border border-htb-border group-hover:border-htb-green/40 flex items-center justify-center text-htb-muted group-hover:text-htb-green transition-colors mb-3">
@@ -1324,7 +1424,7 @@ export default function AdminPage() {
                   <p className="text-xs font-semibold text-htb-heading group-hover:text-htb-green transition-colors">
                     Click to Start Camera Scanner
                   </p>
-                    <p className="text-[11px] text-htb-muted mt-1">
+                  <p className="text-[11px] text-htb-muted mt-1">
                     Holds the QR anywhere in view and fires the moment it reads
                   </p>
                 </div>
@@ -1737,18 +1837,18 @@ export default function AdminPage() {
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
-          {/* Blackout Backdrop - tap outside closes cleanly */}
+          {/* Blackout Backdrop - tap outside closes cleanly (Option A: leaves camera off) */}
           <div
             className="fixed inset-0 bg-black/85 backdrop-blur-md animate-fade-in cursor-pointer"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              resumeCameraScanning();
+              dismissCameraToast();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              resumeCameraScanning();
+              dismissCameraToast();
             }}
           />
 
@@ -1803,12 +1903,12 @@ export default function AdminPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  resumeCameraScanning();
+                  dismissCameraToast();
                 }}
                 onTouchEnd={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  resumeCameraScanning();
+                  dismissCameraToast();
                 }}
                 className="w-8 h-8 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-lg leading-none transition-colors active:scale-90"
                 aria-label="Close result"
@@ -1846,28 +1946,12 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Action Buttons: See Info and Close */}
-            <div className="pt-2 flex items-center gap-2.5">
-              {cameraToast.participant && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = cameraToast.participant!;
-                    setCameraToast(null);
-                    openParticipant(p);
-                  }}
-                  className="flex-1 h-11 bg-htb-elevated hover:bg-htb-elevated-hover border border-htb-border hover:border-htb-heading/40 text-htb-heading font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <svg className="w-4 h-4 text-htb-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>See Info</span>
-                </button>
-              )}
+            {/* Action Button: Scan Next Pass */}
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={resumeCameraScanning}
-                className="flex-1 h-11 bg-htb-green hover:bg-htb-green-dim text-htb-bg font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                className="w-full h-11 bg-htb-green hover:bg-htb-green-dim text-htb-bg font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -2159,12 +2243,12 @@ export default function AdminPage() {
             onPointerUp={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
-            className="relative z-10 bg-htb-card border border-htb-border w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 pointer-events-auto overscroll-contain"
+            className="relative z-10 bg-htb-card border border-htb-border w-full max-w-md rounded-2xl p-4 sm:p-5 shadow-2xl space-y-3 pointer-events-auto overscroll-contain"
           >
-            <div className="flex items-center justify-between border-b border-htb-border pb-3">
+            <div className="flex items-center justify-between border-b border-htb-border pb-2">
               <div>
-                <h3 className="text-base font-bold text-htb-heading">Import Participants (JSON)</h3>
-                <p className="text-xs text-htb-muted">Upload a JSON file of attendee records</p>
+                <h3 className="text-sm sm:text-base font-bold text-htb-heading leading-tight">Import Participants (JSON)</h3>
+                <p className="text-[11px] text-htb-muted">Upload a JSON file of attendee records</p>
               </div>
               <button
                 type="button"
@@ -2186,21 +2270,21 @@ export default function AdminPage() {
                   setImportError('');
                   setImportPreviewCount(null);
                 }}
-                className="w-8 h-8 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-lg leading-none transition-colors active:scale-90"
+                className="w-7 h-7 rounded-full bg-htb-elevated border border-htb-border hover:border-htb-border-light text-htb-muted hover:text-htb-heading flex items-center justify-center text-base leading-none transition-colors active:scale-90"
               >
                 &times;
               </button>
             </div>
 
             {/* Expected JSON Format Helper */}
-            <div className="bg-htb-elevated/70 border border-htb-border rounded-xl p-3 space-y-1.5">
+            <div className="bg-htb-elevated/70 border border-htb-border rounded-xl p-2.5 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-htb-heading">Sample JSON Format</span>
-                <span className="text-[10px] font-mono font-medium text-htb-warning bg-htb-warning/10 border border-htb-warning/30 px-2 py-0.5 rounded">
+                <span className="text-[11px] font-semibold text-htb-heading">Sample JSON Format</span>
+                <span className="text-[10px] font-mono font-medium text-htb-warning bg-htb-warning/10 border border-htb-warning/30 px-1.5 py-0.5 rounded">
                   raNumber is optional
                 </span>
               </div>
-              <pre className="text-[11px] font-mono text-htb-muted bg-htb-card p-2.5 rounded-lg border border-htb-border overflow-x-auto select-all">
+              <pre className="text-[10.5px] leading-tight font-mono text-htb-muted bg-htb-card py-2 px-2.5 rounded-lg border border-htb-border overflow-x-auto select-all">
 {`[
   {
     "name": "David Miller",
@@ -2209,14 +2293,11 @@ export default function AdminPage() {
   }
 ]`}
               </pre>
-              <p className="text-[11px] text-htb-muted leading-relaxed">
-                Provide an array of objects. <strong className="text-htb-heading">name</strong> and <strong className="text-htb-heading">email</strong> are required. <strong className="text-htb-heading">raNumber</strong> is optional.
-              </p>
             </div>
 
             {/* File Selection */}
             <div>
-              <label className="block text-xs font-medium text-htb-heading mb-1.5">
+              <label className="block text-[11px] font-medium text-htb-heading mb-1">
                 Select JSON File
               </label>
               <input
@@ -2228,12 +2309,12 @@ export default function AdminPage() {
               />
               <div
                 onClick={() => jsonFileInputRef.current?.click()}
-                className="border-2 border-dashed border-htb-border hover:border-htb-border-light rounded-xl p-4 text-center cursor-pointer bg-htb-elevated/40 hover:bg-htb-elevated transition-colors"
+                className="border-2 border-dashed border-htb-border hover:border-htb-border-light rounded-xl py-2 px-3 text-center cursor-pointer bg-htb-elevated/40 hover:bg-htb-elevated transition-colors"
               >
                 {importFile ? (
                   <div>
                     <p className="text-xs font-semibold text-htb-heading">{importFile.name}</p>
-                    <p className="text-[11px] text-htb-muted mt-0.5">
+                    <p className="text-[10.5px] text-htb-muted mt-0.5">
                       {(importFile.size / 1024).toFixed(1)} KB
                       {importPreviewCount !== null && ` • ${importPreviewCount} valid participants`}
                     </p>
@@ -2243,18 +2324,17 @@ export default function AdminPage() {
                         e.stopPropagation();
                         jsonFileInputRef.current?.click();
                       }}
-                      className="text-[11px] text-htb-green hover:underline mt-2 inline-block"
+                      className="text-[10.5px] text-htb-green hover:underline mt-1 inline-block"
                     >
                       Choose different file
                     </button>
                   </div>
                 ) : (
                   <div>
-                    <svg className="w-8 h-8 mx-auto text-htb-muted/70 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5 mx-auto text-htb-muted/70 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <p className="text-xs font-medium text-htb-heading">Click to browse JSON file</p>
-                    <p className="text-[11px] text-htb-muted mt-1">Accepts array of participants: [{'{'} name, email, ra_number? {'}'}]</p>
                   </div>
                 )}
               </div>
@@ -2262,20 +2342,20 @@ export default function AdminPage() {
 
             {/* Import Mode: The 2 Options */}
             <div>
-              <label className="block text-xs font-medium text-htb-heading mb-2">
+              <label className="block text-[11px] font-medium text-htb-heading mb-1">
                 Choose Import Action
               </label>
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {/* Option 1: Add as Add-on (Merge) */}
                 <div
                   onClick={() => setImportMode('merge')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     importMode === 'merge'
                       ? 'border-htb-green/60 bg-htb-green/5 ring-1 ring-htb-green/40'
                       : 'border-htb-border bg-htb-elevated/40 hover:bg-htb-elevated'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <input
                       type="radio"
                       name="importMode"
@@ -2284,10 +2364,10 @@ export default function AdminPage() {
                       className="mt-0.5 text-htb-green focus:ring-htb-green"
                     />
                     <div>
-                      <p className="text-xs font-semibold text-htb-heading">
+                      <p className="text-xs font-semibold text-htb-heading leading-tight">
                         Add as Add-on to Existing Participants (Merge)
                       </p>
-                      <p className="text-[11px] text-htb-muted mt-0.5 leading-relaxed">
+                      <p className="text-[10.5px] text-htb-muted mt-0.5 leading-snug">
                         Preserves existing participants, RSVP tokens, and check-in records. Adds new participants and updates existing details.
                       </p>
                     </div>
@@ -2297,13 +2377,13 @@ export default function AdminPage() {
                 {/* Option 2: Remove Existing Data (Replace all) */}
                 <div
                   onClick={() => setImportMode('replace')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     importMode === 'replace'
                       ? 'border-htb-warning/60 bg-htb-warning/5 ring-1 ring-htb-warning/40'
                       : 'border-htb-border bg-htb-elevated/40 hover:bg-htb-elevated'
                   }`}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <input
                       type="radio"
                       name="importMode"
@@ -2312,10 +2392,10 @@ export default function AdminPage() {
                       className="mt-0.5 text-htb-warning focus:ring-htb-warning"
                     />
                     <div>
-                      <p className="text-xs font-semibold text-htb-heading">
+                      <p className="text-xs font-semibold text-htb-heading leading-tight">
                         Remove Existing Data & Replace All
                       </p>
-                      <p className="text-[11px] text-htb-muted mt-0.5 leading-relaxed">
+                      <p className="text-[10.5px] text-htb-muted mt-0.5 leading-snug">
                         Removes all current participants and completely replaces the database with the records from the uploaded JSON.
                       </p>
                     </div>
@@ -2325,13 +2405,13 @@ export default function AdminPage() {
             </div>
 
             {importError && (
-              <div className="p-2.5 rounded-lg bg-htb-error/10 border border-htb-error/30 text-htb-error text-xs">
+              <div className="p-2 rounded-lg bg-htb-error/10 border border-htb-error/30 text-htb-error text-xs">
                 {importError}
               </div>
             )}
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-htb-border">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-htb-border">
               <button
                 type="button"
                 onClick={() => {
@@ -2341,7 +2421,7 @@ export default function AdminPage() {
                   setImportError('');
                   setImportPreviewCount(null);
                 }}
-                className="h-10 px-4 rounded-lg border border-htb-border hover:bg-htb-elevated text-htb-muted hover:text-htb-heading text-xs font-medium transition-colors"
+                className="h-8 px-3.5 rounded-lg border border-htb-border hover:bg-htb-elevated text-htb-muted hover:text-htb-heading text-xs font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -2349,7 +2429,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleExecuteImport}
                 disabled={!importFile || importLoading || importPreviewCount === 0}
-                className="h-10 px-5 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                className="h-8 px-4 bg-htb-green hover:bg-htb-green-dim disabled:opacity-50 text-htb-bg text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
               >
                 {importLoading ? 'Importing...' : 'Import Participants'}
               </button>
